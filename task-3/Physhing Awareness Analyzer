@@ -1,0 +1,386 @@
+"""
+DecodeLabs Project 3 - Phishing Awareness Analyzer
+A heuristic-based triage tool that scans pasted email/message text
+(headers + body) for known phishing red flags and returns a
+Safe / Suspicious / Malicious verdict following a Pause-Verify-Report
+decision tree.
+
+This is a TEXT-PATTERN / HEURISTIC simulation tool. It does NOT connect
+to live mail servers, DNS, or threat-intel APIs - it evaluates whatever
+sample text the analyst pastes in, exactly like a manual SOC triage
+exercise.
+"""
+
+import tkinter as tk
+from tkinter import ttk, scrolledtext, messagebox
+import re
+
+# ---------------------------------------------------------------------------
+# THEME
+# ---------------------------------------------------------------------------
+BG = "#0a0e0f"
+PANEL = "#11171a"
+CARD = "#161d20"
+TEXT = "#e8f2ef"
+SUBTEXT = "#8fa3a0"
+EMERALD = "#12b886"
+TEAL = "#2dd4bf"
+SAFE = "#2ecc71"
+SUSPICIOUS = "#f5a623"
+MALICIOUS = "#e74c3c"
+BORDER = "#22302c"
+
+FONT_TITLE = ("Segoe UI", 20, "bold")
+FONT_SUB = ("Segoe UI", 10)
+FONT_LABEL = ("Segoe UI", 11, "bold")
+FONT_BODY = ("Consolas", 10)
+FONT_VERDICT = ("Segoe UI", 16, "bold")
+
+# ---------------------------------------------------------------------------
+# RED FLAG RULES  (mirrors the 11 red flags from the training deck)
+# Each rule: (id, label, severity_weight, category, detector_fn, explanation)
+# ---------------------------------------------------------------------------
+
+def has_domain_mismatch(text):
+    m = re.findall(r'From:.*?<([^>]+)>', text, re.IGNORECASE)
+    display = re.findall(r'From:\s*([^<\n]+)<', text, re.IGNORECASE)
+    if m and display:
+        domain = m[0].split('@')[-1].lower()
+        known_brands = ["microsoft", "google", "paypal", "apple", "amazon",
+                         "ceo", "hr", "it support", "bank"]
+        disp = display[0].lower()
+        if any(b in disp for b in known_brands) and not any(
+            b.replace(" ", "") in domain for b in known_brands
+        ):
+            return True
+    return False
+
+def has_forwarded_chain(text):
+    return bool(re.search(r'\bFW:|Fwd:', text, re.IGNORECASE)) and \
+           bool(re.search(r'From:.*From:', text, re.DOTALL))
+
+def has_login_popup(text):
+    return bool(re.search(r'sign in|log ?in|verify your account|confirm your password',
+                           text, re.IGNORECASE))
+
+def has_dangerous_attachment(text):
+    return bool(re.search(r'\.(iso|js|scr|exe|vbs|bat|hta|jar)\b', text, re.IGNORECASE))
+
+def has_bypass_request(text):
+    return bool(re.search(r'strictly confidential|do not discuss|bypass (the )?(standard|normal) '
+                           r'procedure|keep this (private|secret)', text, re.IGNORECASE))
+
+def has_sensitive_info_request(text):
+    return bool(re.search(r'\b(otp|mfa code|password|pin|cvv|account number|routing number|'
+                           r'wire transfer|update.*billing)\b', text, re.IGNORECASE))
+
+def has_activity_alert(text):
+    return bool(re.search(r'unusual sign-?in|new device detected|suspicious login|'
+                           r'account (locked|will be locked|suspended)', text, re.IGNORECASE))
+
+def has_mfa_fatigue(text):
+    return bool(re.search(r'approve sign-?in|multiple.*(approve|push)', text, re.IGNORECASE))
+
+def has_callback_scam(text):
+    has_phone = bool(re.search(r'call\s+\(?\d{1,3}\)?[\s-]?\d{3}[\s-]?\d{4}', text, re.IGNORECASE))
+    has_link = bool(re.search(r'https?://', text, re.IGNORECASE))
+    return has_phone and not has_link
+
+def has_qr_prompt(text):
+    return bool(re.search(r'qr code|scan to unlock|scan to (secure|verify)', text, re.IGNORECASE))
+
+def has_lookalike_domain(text):
+    urls = re.findall(r'https?://[^\s"\'<>]+', text)
+    suspicious_patterns = [r'\d(?=[a-z])', r'-secure-', r'-login', r'-update',
+                            r'-verify', r'\.tech\.', r'\.info\b', r'\.xyz\b']
+    for u in urls:
+        for p in suspicious_patterns:
+            if re.search(p, u, re.IGNORECASE):
+                return True
+    return False
+
+def has_urgency_language(text):
+    cleaned = re.sub(r'non-urgent|non urgent', '', text, flags=re.IGNORECASE)
+    return bool(re.search(r'\b(urgent|immediately|act now|expires? in|24 hours|30 minutes|'
+                           r'final notice|last chance|account locked)\b', cleaned, re.IGNORECASE))
+
+def has_authority_impersonation(text):
+    return bool(re.search(r'\b(ceo|cfo|it support|law enforcement|government|irs|fbi|police)\b',
+                           text, re.IGNORECASE))
+
+def has_reward_bait(text):
+    return bool(re.search(r'\b(you.?ve won|prize|gift card|congratulations|claim your reward)\b',
+                           text, re.IGNORECASE))
+
+def has_return_path_mismatch(text):
+    from_match = re.search(r'From:.*?<([^>]+)>', text, re.IGNORECASE)
+    rp_match = re.search(r'Return-Path:\s*<?([^\s>]+)>?', text, re.IGNORECASE)
+    if from_match and rp_match:
+        from_domain = from_match.group(1).split('@')[-1].lower().strip()
+        rp_domain = rp_match.group(1).split('@')[-1].lower().strip()
+        if from_domain and rp_domain and from_domain != rp_domain:
+            return True
+    return False
+
+RULES = [
+    ("RF1", "Sender-Domain Mismatch", 3, "Header",
+     has_domain_mismatch,
+     "Display name references a trusted brand/role but the actual From "
+     "address domain does not match it."),
+    ("RF2", "Fake Forwarded Chain", 2, "Header",
+     has_forwarded_chain,
+     "Message contains pasted FW:/Fwd: headers simulating a conversation "
+     "the recipient was never part of."),
+    ("RF3", "Credential Harvesting / Login Prompt", 3, "Content",
+     has_login_popup,
+     "Message pushes the user toward a sign-in or password confirmation page."),
+    ("RF4", "Dangerous Attachment", 3, "Attachment",
+     has_dangerous_attachment,
+     "Attachment uses a high-risk executable/script extension (.iso, .js, "
+     ".scr, .exe, .vbs, .bat, .hta, .jar)."),
+    ("RF5", "Urgent Bypass Request", 3, "Content",
+     has_bypass_request,
+     "Message demands secrecy or explicit bypass of normal procedure."),
+    ("RF6", "Request for Sensitive Info", 3, "Content",
+     has_sensitive_info_request,
+     "Unexpected request for MFA codes, passwords, payment details, or a wire transfer."),
+    ("RF7", "Fake Activity/Security Alert", 2, "Content",
+     has_activity_alert,
+     "Alarmist unusual sign-in or account-lock warning pointing to a login page."),
+    ("RF8", "MFA Fatigue Pattern", 3, "Content",
+     has_mfa_fatigue,
+     "Language referencing repeated approve/push notifications to wear the user down."),
+    ("RF9", "Callback Scam (TOAD)", 2, "Content",
+     has_callback_scam,
+     "No malicious link present, only a phone number urging a callback."),
+    ("RF10", "QR Code Prompt", 2, "Content",
+     has_qr_prompt,
+     "Unsolicited QR code/scan-to-verify prompt, often used to bypass desktop filters."),
+    ("RF11", "Lookalike / Suspicious URL", 3, "Technical",
+     has_lookalike_domain,
+     "URL shows typosquatting, extra hyphenated words, or an unusual subdomain/TLD pattern."),
+    ("RF12", "Urgency / Time Pressure", 1, "Psychology",
+     has_urgency_language,
+     "Artificial time pressure language designed to trigger fight-or-flight response."),
+    ("RF13", "Authority Impersonation", 1, "Psychology",
+     has_authority_impersonation,
+     "References C-suite, IT, or law enforcement to demand unquestioned compliance."),
+    ("RF14", "Fear/Greed Bait", 1, "Psychology",
+     has_reward_bait,
+     "Promises an unearned reward or threatens a negative consequence."),
+    ("RF15", "Return-Path / From Mismatch", 3, "Header",
+     has_return_path_mismatch,
+     "The Return-Path (bounce address) domain does not match the From domain, "
+     "indicating the true sending server differs from the claimed sender."),
+]
+
+SAMPLE_EMAILS = {
+    "-- Select a sample --": "",
+    "Sample 1: BEC Wire Transfer": (
+        "From: CEO Name <hacker@gmail.com>\n"
+        "Return-Path: <bounce@spoofed-relay.ru>\n"
+        "Subject: URGENT: Immediate Wire Transfer Required\n\n"
+        "This is strictly confidential, do not discuss with anyone.\n"
+        "Please process the attached wire transfer immediately, bypass "
+        "the standard procedure. Account locked in 30 minutes if not done.\n"
+        "Attachment: Wire_Instructions.iso\n"
+    ),
+    "Sample 2: Fake Microsoft Login": (
+        "From: Microsoft Support <support@logins-updates.com>\n"
+        "Return-Path: <mailer@bulk-sender-net.cn>\n"
+        "Subject: FW: Urgent Your Account Security Alert\n\n"
+        "We detected an unusual sign-in to your account. Your account will "
+        "be locked in 24 hours. Sign in now to verify your account: "
+        "http://microsoft-secure-login.tech.verify-update.com\n"
+    ),
+    "Sample 3: Legit Internal Email": (
+        "From: Project Manager <sarah.lee@company.com>\n"
+        "Return-Path: <sarah.lee@company.com>\n"
+        "Subject: Q3 Project Status Update - Non-Urgent\n\n"
+        "Hi Team, please review the attached project status for Q3 at your "
+        "earliest convenience. No immediate action is required.\n"
+        "Attachment: Q3_Status.pdf\n"
+    ),
+}
+
+
+class PhishingAnalyzer(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("DecodeLabs | Phishing Awareness Analyzer - Project 3")
+        self.geometry("1180x760")
+        self.configure(bg=BG)
+        self.minsize(1000, 680)
+        self._build_ui()
+
+    # ------------------------------------------------------------------
+    def _build_ui(self):
+        header = tk.Frame(self, bg=BG)
+        header.pack(fill="x", padx=24, pady=(20, 10))
+
+        tk.Label(header, text="Phishing Awareness Analyzer", font=FONT_TITLE,
+                 bg=BG, fg=TEXT).pack(anchor="w")
+        tk.Label(header,
+                 text="DecodeLabs Project 3  \u2022  Detection Phase  \u2022  Heuristic Triage Simulation "
+                      "(not a live threat-intel feed)",
+                 font=FONT_SUB, bg=BG, fg=SUBTEXT).pack(anchor="w", pady=(2, 0))
+
+        body = tk.Frame(self, bg=BG)
+        body.pack(fill="both", expand=True, padx=24, pady=10)
+        body.columnconfigure(0, weight=1)
+        body.columnconfigure(1, weight=1)
+        body.rowconfigure(0, weight=1)
+
+        # ---------------- LEFT: input panel ----------------
+        left = tk.Frame(body, bg=PANEL, highlightbackground=BORDER,
+                         highlightthickness=1)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+
+        tk.Label(left, text="1. Paste Email / Message Content", font=FONT_LABEL,
+                 bg=PANEL, fg=TEAL).pack(anchor="w", padx=16, pady=(16, 4))
+        tk.Label(left, text="Include headers (From, Subject) and body text for best accuracy.",
+                 font=FONT_SUB, bg=PANEL, fg=SUBTEXT).pack(anchor="w", padx=16)
+
+        sample_row = tk.Frame(left, bg=PANEL)
+        sample_row.pack(fill="x", padx=16, pady=(10, 4))
+        tk.Label(sample_row, text="Load sample:", font=FONT_SUB, bg=PANEL, fg=SUBTEXT).pack(side="left")
+        self.sample_var = tk.StringVar(value="-- Select a sample --")
+        sample_menu = ttk.Combobox(sample_row, textvariable=self.sample_var,
+                                    values=list(SAMPLE_EMAILS.keys()), state="readonly", width=32)
+        sample_menu.pack(side="left", padx=8)
+        sample_menu.bind("<<ComboboxSelected>>", self._load_sample)
+
+        self.input_box = scrolledtext.ScrolledText(
+            left, wrap="word", font=FONT_BODY, bg=CARD, fg=TEXT,
+            insertbackground=TEXT, relief="flat", padx=10, pady=10)
+        self.input_box.pack(fill="both", expand=True, padx=16, pady=10)
+
+        btn_row = tk.Frame(left, bg=PANEL)
+        btn_row.pack(fill="x", padx=16, pady=(0, 16))
+        analyze_btn = tk.Button(btn_row, text="Analyze Message", font=FONT_LABEL,
+                                 bg=EMERALD, fg="#04211a", activebackground=TEAL,
+                                 relief="flat", padx=18, pady=8, cursor="hand2",
+                                 command=self.analyze)
+        analyze_btn.pack(side="left")
+        clear_btn = tk.Button(btn_row, text="Clear", font=FONT_SUB,
+                               bg=CARD, fg=TEXT, activebackground=BORDER,
+                               relief="flat", padx=14, pady=8, cursor="hand2",
+                               command=self._clear)
+        clear_btn.pack(side="left", padx=8)
+
+        # ---------------- RIGHT: results panel ----------------
+        right = tk.Frame(body, bg=PANEL, highlightbackground=BORDER,
+                          highlightthickness=1)
+        right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+
+        tk.Label(right, text="2. Triage Result", font=FONT_LABEL,
+                 bg=PANEL, fg=TEAL).pack(anchor="w", padx=16, pady=(16, 4))
+
+        self.verdict_frame = tk.Frame(right, bg=CARD, highlightthickness=2,
+                                       highlightbackground=BORDER)
+        self.verdict_frame.pack(fill="x", padx=16, pady=(6, 10))
+        self.verdict_label = tk.Label(self.verdict_frame, text="Awaiting analysis...",
+                                       font=FONT_VERDICT, bg=CARD, fg=SUBTEXT, pady=14)
+        self.verdict_label.pack(fill="x")
+        self.action_label = tk.Label(self.verdict_frame, text="", font=FONT_SUB,
+                                      bg=CARD, fg=SUBTEXT, pady=(0))
+        self.action_label.pack(fill="x", pady=(0, 12))
+
+        tk.Label(right, text="Detected Red Flags", font=FONT_LABEL,
+                 bg=PANEL, fg=TEXT).pack(anchor="w", padx=16, pady=(6, 4))
+
+        canvas_frame = tk.Frame(right, bg=PANEL)
+        canvas_frame.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+
+        self.results_canvas = tk.Canvas(canvas_frame, bg=PANEL, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=self.results_canvas.yview)
+        self.results_inner = tk.Frame(self.results_canvas, bg=PANEL)
+
+        self.results_inner.bind(
+            "<Configure>",
+            lambda e: self.results_canvas.configure(scrollregion=self.results_canvas.bbox("all"))
+        )
+        self.results_canvas.create_window((0, 0), window=self.results_inner, anchor="nw")
+        self.results_canvas.configure(yscrollcommand=scrollbar.set)
+        self.results_canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        self._render_placeholder()
+
+    # ------------------------------------------------------------------
+    def _load_sample(self, event=None):
+        key = self.sample_var.get()
+        text = SAMPLE_EMAILS.get(key, "")
+        self.input_box.delete("1.0", "end")
+        self.input_box.insert("1.0", text)
+
+    def _clear(self):
+        self.input_box.delete("1.0", "end")
+        self._render_placeholder()
+        self.verdict_label.config(text="Awaiting analysis...", fg=SUBTEXT)
+        self.action_label.config(text="")
+        self.verdict_frame.config(highlightbackground=BORDER)
+
+    def _render_placeholder(self):
+        for w in self.results_inner.winfo_children():
+            w.destroy()
+        tk.Label(self.results_inner, text="No message analyzed yet.\nPaste content on the "
+                                           "left and click Analyze.",
+                 font=FONT_SUB, bg=PANEL, fg=SUBTEXT, justify="left").pack(
+            anchor="w", padx=4, pady=10)
+
+    # ------------------------------------------------------------------
+    def analyze(self):
+        text = self.input_box.get("1.0", "end").strip()
+        if not text:
+            messagebox.showwarning("No content", "Please paste an email/message to analyze.")
+            return
+
+        for w in self.results_inner.winfo_children():
+            w.destroy()
+
+        score = 0
+        hits = []
+        for rid, label, weight, category, fn, explanation in RULES:
+            try:
+                triggered = fn(text)
+            except Exception:
+                triggered = False
+            if triggered:
+                score += weight
+                hits.append((rid, label, weight, category, explanation))
+
+        if not hits:
+            tk.Label(self.results_inner, text="No red flags detected against current ruleset.",
+                      font=FONT_SUB, bg=PANEL, fg=SAFE, justify="left").pack(
+                anchor="w", padx=4, pady=10)
+        else:
+            for rid, label, weight, category, explanation in hits:
+                color = MALICIOUS if weight >= 3 else (SUSPICIOUS if weight == 2 else SUBTEXT)
+                card = tk.Frame(self.results_inner, bg=CARD, highlightthickness=1,
+                                 highlightbackground=color)
+                card.pack(fill="x", pady=5, ipady=6)
+                top = tk.Frame(card, bg=CARD)
+                top.pack(fill="x", padx=10, pady=(6, 0))
+                tk.Label(top, text=f"{rid} \u2022 {label}", font=("Segoe UI", 10, "bold"),
+                         bg=CARD, fg=TEXT).pack(side="left")
+                tk.Label(top, text=category, font=("Segoe UI", 8), bg=CARD, fg=TEAL).pack(side="right")
+                tk.Label(card, text=explanation, font=FONT_SUB, bg=CARD, fg=SUBTEXT,
+                         wraplength=460, justify="left").pack(anchor="w", padx=10, pady=(4, 6))
+
+        # ---- decision tree verdict ----
+        if score == 0:
+            verdict, color, action = "SAFE", SAFE, "Action: CLOSE - No indicators found. Standard caution still applies."
+        elif score <= 4:
+            verdict, color, action = "SUSPICIOUS", SUSPICIOUS, "Action: WARN USER - Pause, verify sender via a separate channel before acting."
+        else:
+            verdict, color, action = "MALICIOUS", MALICIOUS, "Action: BLOCK & ESCALATE - Report to security team, do not click/reply/download."
+
+        self.verdict_label.config(text=f"{verdict}  (Risk Score: {score})", fg=color)
+        self.action_label.config(text=action, fg=SUBTEXT)
+        self.verdict_frame.config(highlightbackground=color)
+
+
+if __name__ == "__main__":
+    app = PhishingAnalyzer()
+    app.mainloop()
