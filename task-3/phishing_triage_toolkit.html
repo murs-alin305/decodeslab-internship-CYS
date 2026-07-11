@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phishing Triage Toolkit — DecodeLabs Cyber Security Project 3</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+  :root {
+    --bg: #0d0f12;
+    --surface: #13161b;
+    --surface2: #1a1e25;
+    --surface3: #21262f;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8eaf0;
+    --muted: #8b909e;
+    --accent: #3b82f6;
+    --accent-dim: rgba(59,130,246,0.12);
+    --danger: #ef4444;
+    --danger-dim: rgba(239,68,68,0.12);
+    --warn: #f59e0b;
+    --warn-dim: rgba(245,158,11,0.12);
+    --success: #22c55e;
+    --success-dim: rgba(34,197,94,0.12);
+    --radius: 10px;
+    --font: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.6; }
+  
+  /* NAV */
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 32px; display: flex; align-items: center; gap: 12px; height: 56px; position: sticky; top: 0; z-index: 100; }
+  .logo { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--text); text-decoration: none; }
+  .logo .badge { background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px; }
+  .nav-tabs { display: flex; gap: 4px; margin-left: 24px; }
+  .nav-tab { background: none; border: none; color: var(--muted); font-size: 13px; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+  .nav-tab:hover { color: var(--text); background: var(--surface2); }
+  .nav-tab.active { color: var(--text); background: var(--surface3); }
+  
+  /* LAYOUT */
+  .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+  .section { display: none; }
+  .section.active { display: block; }
+  
+  /* HERO */
+  .hero { text-align: center; padding: 48px 0 40px; }
+  .hero h1 { font-size: 38px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 12px; }
+  .hero h1 span { color: var(--accent); }
+  .hero p { color: var(--muted); font-size: 16px; max-width: 560px; margin: 0 auto 28px; }
+  .hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 600px; margin: 0 auto; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; }
+  .stat-card .num { font-size: 32px; font-weight: 700; }
+  .stat-card .num.red { color: var(--danger); }
+  .stat-card .num.amber { color: var(--warn); }
+  .stat-card .num.blue { color: var(--accent); }
+  .stat-card .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+  .card h3 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+  .card p { color: var(--muted); font-size: 13px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  /* SECTION HEADER */
+  .section-header { margin-bottom: 28px; }
+  .section-header h2 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+  .section-header p { color: var(--muted); font-size: 14px; }
+
+  /* RED FLAG CHECKLIST */
+  .rf-item { display: flex; gap: 14px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
+  .rf-item:hover { border-color: var(--border2); }
+  .rf-item.checked { border-color: var(--success); background: var(--success-dim); }
+  .rf-checkbox { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border2); flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .rf-item.checked .rf-checkbox { background: var(--success); border-color: var(--success); }
+  .rf-check-icon { color: #fff; font-size: 11px; opacity: 0; }
+  .rf-item.checked .rf-check-icon { opacity: 1; }
+  .rf-content { flex: 1; }
+  .rf-title { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+  .rf-desc { color: var(--muted); font-size: 12px; }
+  .rf-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
+  .badge-red { background: var(--danger-dim); color: var(--danger); }
+  .badge-amber { background: var(--warn-dim); color: var(--warn); }
+  .badge-blue { background: var(--accent-dim); color: var(--accent); }
+  
+  /* CHECKLIST PROGRESS */
+  .progress-bar-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px; }
+  .progress-bar { flex: 1; height: 6px; background: var(--surface3); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--success); border-radius: 3px; transition: width 0.3s; }
+  .progress-label { font-size: 13px; font-weight: 600; min-width: 60px; text-align: right; }
+  .reset-btn { background: var(--surface3); border: 1px solid var(--border); color: var(--muted); font-size: 12px; padding: 5px 12px; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+  .reset-btn:hover { color: var(--text); border-color: var(--border2); }
+
+  /* DECISION TREE */
+  .tree-wrap { overflow-x: auto; }
+  .tree-svg { display: block; width: 100%; }
+  
+  /* ANALYZER */
+  .analyzer-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .email-input-area { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .email-toolbar { background: var(--surface2); border-bottom: 1px solid var(--border); padding: 10px 14px; display: flex; align-items: center; gap: 10px; }
+  .email-toolbar-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .sample-btn { background: var(--surface3); border: 1px solid var(--border2); color: var(--text); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: all 0.15s; }
+  .sample-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .email-body-input { width: 100%; min-height: 280px; background: transparent; border: none; color: var(--text); font-size: 13px; padding: 16px; resize: vertical; font-family: var(--font); outline: none; line-height: 1.7; }
+  .email-fields { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .email-field { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .email-field:last-child { margin-bottom: 0; }
+  .field-lbl { font-size: 12px; color: var(--muted); width: 48px; flex-shrink: 0; }
+  .field-input { flex: 1; background: var(--surface3); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 12px; color: var(--text); font-family: var(--font); outline: none; transition: border-color 0.15s; }
+  .field-input:focus { border-color: var(--accent); }
+  .analyze-btn { width: 100%; background: var(--accent); color: #fff; border: none; padding: 12px; font-size: 14px; font-weight: 600; border-radius: 0 0 var(--radius) var(--radius); cursor: pointer; transition: background 0.15s; }
+  .analyze-btn:hover { background: #2563eb; }
+  
+  .result-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .result-header { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .result-header-text { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .verdict-area { padding: 20px 18px; text-align: center; }
+  .verdict-icon { font-size: 48px; margin-bottom: 8px; }
+  .verdict-label { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .verdict-label.safe { color: var(--success); }
+  .verdict-label.suspicious { color: var(--warn); }
+  .verdict-label.malicious { color: var(--danger); }
+  .verdict-sub { font-size: 13px; color: var(--muted); }
+  .verdict-action { margin-top: 14px; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+  .action-safe { background: var(--success-dim); color: var(--success); }
+  .action-suspicious { background: var(--warn-dim); color: var(--warn); }
+  .action-malicious { background: var(--danger-dim); color: var(--danger); }
+  .findings-list { padding: 0 18px 18px; }
+  .finding-item { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+  .finding-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+  .dot-red { background: var(--danger); }
+  .dot-amber { background: var(--warn); }
+  .dot-green { background: var(--success); }
+  .finding-text { font-size: 12px; color: var(--muted); }
+  .finding-text strong { color: var(--text); }
+  .risk-meter { margin: 16px 18px; }
+  .risk-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .risk-bar { height: 8px; background: var(--surface3); border-radius: 4px; overflow: hidden; }
+  .risk-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+
+  /* PHISHING TYPES */
+  .type-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 12px; display: flex; gap: 16px; align-items: flex-start; transition: border-color 0.15s; }
+  .type-card:hover { border-color: var(--border2); }
+  .type-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .type-icon-blue { background: var(--accent-dim); color: var(--accent); }
+  .type-icon-red { background: var(--danger-dim); color: var(--danger); }
+  .type-icon-amber { background: var(--warn-dim); color: var(--warn); }
+  .type-icon-green { background: var(--success-dim); color: var(--success); }
+  .type-body { flex: 1; }
+  .type-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .type-desc { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .type-flags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .flag-tag { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: var(--surface3); color: var(--muted); border: 1px solid var(--border); }
+  .targeting-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 5px; float: right; }
+  .target-mass { background: var(--accent-dim); color: var(--accent); }
+  .target-spear { background: var(--warn-dim); color: var(--warn); }
+  .target-whale { background: var(--danger-dim); color: var(--danger); }
+
+  /* SIMULATION */
+  .sim-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; }
+  .sim-header { background: var(--surface2); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .sim-title { font-weight: 600; font-size: 14px; }
+  .sim-level { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+  .sim-body { padding: 0; }
+  .sim-email { background: var(--surface3); border-radius: 0; font-family: monospace; font-size: 12px; padding: 16px; line-height: 1.8; color: #c9d1d9; position: relative; }
+  .sim-email .sender { color: #79c0ff; }
+  .sim-email .subject { color: #ffa657; }
+  .sim-email .danger-link { color: var(--danger); text-decoration: underline; }
+  .sim-email .urgency { color: var(--danger); font-weight: bold; }
+  .sim-analysis { padding: 16px; }
+  .sim-analysis-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .flags-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .flag-item { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; background: var(--surface2); border-radius: 6px; }
+  .flag-num { width: 18px; height: 18px; background: var(--danger); color: #fff; border-radius: 50%; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .flag-text { font-size: 12px; color: var(--muted); }
+  .flag-text strong { color: var(--text); display: block; margin-bottom: 1px; }
+  .verdict-row { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); align-items: center; }
+  .verdict-chip { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+  .chip-malicious { background: var(--danger-dim); color: var(--danger); }
+  .chip-suspicious { background: var(--warn-dim); color: var(--warn); }
+  .chip-safe { background: var(--success-dim); color: var(--success); }
+  .verdict-action-text { font-size: 12px; color: var(--muted); }
+
+  /* COGNITIVE TRIGGERS */
+  .trigger-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  .trigger-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+  .trigger-card .t-icon { font-size: 24px; margin-bottom: 10px; }
+  .trigger-card .t-name { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+  .trigger-card .t-desc { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .trigger-card .t-example { font-size: 12px; background: var(--surface3); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 0 6px 6px 0; color: var(--text); font-style: italic; }
+
+  /* DOMAIN SPOOF */
+  .domain-compare { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 14px; }
+  .domain-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .domain-label { width: 80px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .domain-val { font-size: 15px; font-family: monospace; }
+  .domain-real { color: var(--success); }
+  .domain-fake { color: var(--danger); }
+  .domain-highlight { background: var(--danger-dim); border-radius: 3px; padding: 0 2px; }
+  .domain-type-label { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+
+  /* PVR */
+  .pvr-wrap { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .pvr-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; }
+  .pvr-num { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; margin: 0 auto 12px; }
+  .pvr-1 { background: var(--accent-dim); color: var(--accent); }
+  .pvr-2 { background: var(--warn-dim); color: var(--warn); }
+  .pvr-3 { background: var(--success-dim); color: var(--success); }
+  .pvr-title { font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+  .pvr-desc { font-size: 12px; color: var(--muted); }
+
+  /* TABS */
+  .inner-tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .inner-tab { background: none; border: none; color: var(--muted); font-size: 13px; padding: 8px 14px; border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.15s; margin-bottom: -1px; }
+  .inner-tab:hover { color: var(--text); }
+  .inner-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .inner-panel { display: none; }
+  .inner-panel.active { display: block; }
+
+  /* SCORING */
+  .score-wrap { display: grid; grid-template-columns: 200px 1fr; gap: 24px; align-items: start; }
+  .score-circle { width: 160px; height: 160px; position: relative; margin: 0 auto; }
+  .score-svg { transform: rotate(-90deg); }
+  .score-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
+  .score-num { font-size: 38px; font-weight: 700; }
+  .score-max { font-size: 14px; color: var(--muted); }
+
+  /* URL ANALYZER */
+  .url-input-row { display: flex; gap: 10px; margin-bottom: 16px; }
+  .url-field { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; color: var(--text); font-family: monospace; outline: none; transition: border-color 0.15s; }
+  .url-field:focus { border-color: var(--accent); }
+  .url-analyze-btn { background: var(--accent); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
+  .url-analyze-btn:hover { background: #2563eb; }
+  .url-breakdown { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; font-family: monospace; font-size: 14px; margin-bottom: 16px; line-height: 2; }
+  .url-scheme { color: #79c0ff; }
+  .url-subdomain { color: #ffa657; }
+  .url-domain { color: var(--danger); font-weight: 700; }
+  .url-tld { color: var(--danger); }
+  .url-path { color: var(--muted); }
+
+  /* FOOTER */
+  footer { text-align: center; padding: 24px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); margin-top: 48px; }
+  footer a { color: var(--accent); text-decoration: none; }
+
+  @media (max-width: 720px) {
+    .grid-2, .grid-3, .pvr-wrap, .trigger-grid, .analyzer-wrap { grid-template-columns: 1fr; }
+    .score-wrap { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 26px; }
+    .hero-stats { grid-template-columns: 1fr; max-width: 280px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="logo">
+    <i class="ti ti-shield-lock" style="color:var(--accent);font-size:18px"></i>
+    PhishGuard Toolkit
+    <span class="badge">PROJECT 3</span>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showSection('dashboard')"><i class="ti ti-home"></i> Dashboard</button>
+    <button class="nav-tab" onclick="showSection('checklist')"><i class="ti ti-checklist"></i> Triage Checklist</button>
+    <button class="nav-tab" onclick="showSection('analyzer')"><i class="ti ti-search"></i> Email Analyzer</button>
+    <button class="nav-tab" onclick="showSection('types')"><i class="ti ti-sitemap"></i> Phishing Types</button>
+    <button class="nav-tab" onclick="showSection('redflags')"><i class="ti ti-flag"></i> Red Flags</button>
+    <button class="nav-tab" onclick="showSection('simulations')"><i class="ti ti-file-text"></i> Simulations</button>
+    <button class="nav-tab" onclick="showSection('decision')"><i class="ti ti-git-branch"></i> Decision Tree</button>
+  </div>
+</nav>
+
+<!-- ===== DASHBOARD ===== -->
+<div id="section-dashboard" class="section active">
+  <div class="container">
+    <div class="hero">
+      <h1>Phishing <span>Awareness</span> Analysis</h1>
+      <p>Project 3 — DecodeLabs Industrial Training Kit 2026. Detect, analyze, and neutralize phishing threats.</p>
+      <div class="hero-stats">
+        <div class="stat-card"><div class="num red">80%</div><div class="lbl">of breaches involve phishing</div></div>
+        <div class="stat-card"><div class="num amber">82s</div><div class="lbl">avg time to first click</div></div>
+        <div class="stat-card"><div class="num blue">40%</div><div class="lbl">fell for simulated attacks</div></div>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <h2>Project Overview</h2>
+      <p>Three-phase framework: Input (Bait) → Process (Psychology) → Output (Defense)</p>
+    </div>
+
+    <div class="grid-3" style="margin-bottom:28px">
+      <div class="card" style="border-left:3px solid var(--accent)">
+        <div style="font-size:22px;margin-bottom:10px;color:var(--accent)"><i class="ti ti-mail"></i></div>
+        <h3>Input — The Bait</h3>
+        <p>Delivery methods, phishing types (mass, spear, whale), and technical disguises like domain spoofing.</p>
+      </div>
+      <div class="card" style="border-left:3px solid var(--warn)">
+        <div style="font-size:22px;margin-bottom:10px;color:var(--warn)"><i class="ti ti-brain"></i></div>
+        <h3>Process — Psychology</h3>
+        <p>Cognitive triggers that bypass logic: Authority, Urgency, Curiosity, and Fear/Greed exploitation.</p>
+      </div>
+      <div class="card" style="border-left:3px solid var(--success)">
+        <div style="font-size:22px;margin-bottom:10px;color:var(--success)"><i class="ti ti-shield-check"></i></div>
+        <h3>Output — Defense</h3>
+        <p>Triage checklist, decision tree, and Pause → Verify → Report protocol for all suspicious messages.</p>
+      </div>
+    </div>
+
+    <div class="section-header"><h2>Key Skills Developed</h2></div>
+    <div class="grid-2" style="margin-bottom:28px">
+      <div class="card">
+        <h3><i class="ti ti-microscope" style="color:var(--accent);margin-right:6px"></i>Threat Analysis</h3>
+        <p>Dissecting emails for suspicious patterns, spoofed senders, malicious URLs, and dangerous attachments.</p>
+      </div>
+      <div class="card">
+        <h3><i class="ti ti-eye" style="color:var(--warn);margin-right:6px"></i>Cyber Attack Awareness</h3>
+        <p>Recognizing all attack vectors: Smishing, Vishing, Quishing, Search Engine Phishing, BEC, and Deepfakes.</p>
+      </div>
+      <div class="card">
+        <h3><i class="ti ti-lock" style="color:var(--success);margin-right:6px"></i>Security Thinking</h3>
+        <p>Applying the human firewall mentality — every user is a potential attack surface and a potential defender.</p>
+      </div>
+      <div class="card">
+        <h3><i class="ti ti-report" style="color:var(--accent);margin-right:6px"></i>Incident Triage</h3>
+        <p>Classifying threats as Safe → Close, Suspicious → Warn, or Malicious → Block &amp; Escalate with documented reasoning.</p>
+      </div>
+    </div>
+
+    <div class="pvr-wrap">
+      <div class="pvr-card">
+        <div class="pvr-num pvr-1">1</div>
+        <div class="pvr-title">PAUSE</div>
+        <div class="pvr-desc">Recognize the cognitive trigger (Urgency, Fear, Authority) and stop interacting. Apply the Five-Minute Rule.</div>
+      </div>
+      <div class="pvr-card">
+        <div class="pvr-num pvr-2">2</div>
+        <div class="pvr-title">VERIFY</div>
+        <div class="pvr-desc">Confirm through a secondary, out-of-band channel. Email came in? Verify via phone to a known number.</div>
+      </div>
+      <div class="pvr-card">
+        <div class="pvr-num pvr-3">3</div>
+        <div class="pvr-title">REPORT</div>
+        <div class="pvr-desc">Use the internal reporting plugin. Never just delete — reporting lets the security team purge it from all inboxes.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TRIAGE CHECKLIST ===== -->
+<div id="section-checklist" class="section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Phishing Triage Checklist</h2>
+      <p>A non-expert guide for every employee — click each item as you inspect the suspicious message.</p>
+    </div>
+
+    <div class="progress-bar-wrap">
+      <span style="font-size:13px;color:var(--muted)">Inspection progress</span>
+      <div class="progress-bar"><div class="progress-fill" id="checklist-progress" style="width:0%"></div></div>
+      <span class="progress-label" id="progress-count">0 / 11</span>
+      <button class="reset-btn" onclick="resetChecklist()"><i class="ti ti-refresh"></i> Reset</button>
+    </div>
+
+    <div id="checklist-items">
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">1. Check the sender's actual email address</div>
+          <div class="rf-desc">Expand the "From" field. Does the display name match the actual domain? E.g. "Microsoft Support &lt;hacker@gmail.com&gt;" is a red flag.</div>
+        </div>
+        <span class="rf-badge badge-red">Critical</span>
+      </div>
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">2. Inspect links before clicking (hover or long-press)</div>
+          <div class="rf-desc">Read the URL from right-to-left to find the true root domain. Watch for typosquatting (amaz0n.com), homoglyphs, and subdomain traps.</div>
+        </div>
+        <span class="rf-badge badge-red">Critical</span>
+      </div>
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">3. Identify the cognitive trigger being used</div>
+          <div class="rf-desc">Is there urgency ("Act in 30 minutes"), authority ("Your CEO demands"), curiosity ("See what was said about you"), or fear/greed?</div>
+        </div>
+        <span class="rf-badge badge-red">Critical</span>
+      </div>
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">4. Check for requests to bypass normal procedures</div>
+          <div class="rf-desc">"Do not discuss with anyone." "Bypass standard procedure." "Process immediately." These are hallmarks of BEC and urgent fraud attacks.</div>
+        </div>
+        <span class="rf-badge badge-red">Critical</span>
+      </div>
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">5. Scan for suspicious or dangerous attachments</div>
+          <div class="rf-desc">Uncommon extensions like .iso, .js, .scr, .hta, or HTML files posing as normal documents can run malicious code when opened.</div>
+        </div>
+        <span class="rf-badge badge-amber">High</span>
+      </div>
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">6. Look for unexpected requests for sensitive info</div>
+          <div class="rf-desc">Legitimate organizations never ask for passwords, MFA codes, or payment details via email. Any such request is a major red flag.</div>
+        </div>
+        <span class="rf-badge badge-amber">High</span>
+      </div>
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">7. Watch for MFA fatigue attacks</div>
+          <div class="rf-desc">Multiple unsolicited authenticator push notifications designed to wear you down. Never approve a login you didn't initiate.</div>
+        </div>
+        <span class="rf-badge badge-amber">High</span>
+      </div>
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">8. Check for fake forwarded email chains (FW:)</div>
+          <div class="rf-desc">Pasted headers with odd timestamps from conversations you were never part of — used to build false credibility and context.</div>
+        </div>
+        <span class="rf-badge badge-amber">High</span>
+      </div>
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">9. Evaluate contextual integrity</div>
+          <div class="rf-desc">Does this request make sense given who sent it and when? Would your CEO normally text you about a wire transfer from an airport?</div>
+        </div>
+        <span class="rf-badge badge-blue">Medium</span>
+      </div>
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">10. Be alert to unsolicited QR codes</div>
+          <div class="rf-desc">QR codes bypass desktop URL filters. Malicious codes in PDFs or on physical posters can direct you to spoofed login pages on mobile.</div>
+        </div>
+        <span class="rf-badge badge-blue">Medium</span>
+      </div>
+      <div class="rf-item" onclick="toggleCheck(this)">
+        <div class="rf-checkbox"><i class="ti ti-check rf-check-icon"></i></div>
+        <div class="rf-content">
+          <div class="rf-title">11. Check for Browser-in-the-Browser (BitB) pop-ups</div>
+          <div class="rf-desc">Fake SSO login windows that cannot be dragged outside the main browser. If a "popup" won't move out of the browser window, it's fake.</div>
+        </div>
+        <span class="rf-badge badge-blue">Medium</span>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;padding:18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
+      <h3 style="margin-bottom:12px;font-size:15px"><i class="ti ti-info-circle" style="color:var(--accent);margin-right:6px"></i>After Completing the Checklist</h3>
+      <div class="grid-3">
+        <div style="padding:12px;background:var(--success-dim);border-radius:8px;border:1px solid rgba(34,197,94,0.2)">
+          <div style="font-weight:700;color:var(--success);margin-bottom:4px">0–2 Red Flags → SAFE</div>
+          <div style="font-size:12px;color:var(--muted)">Close the ticket. No action required. Log for reporting metrics.</div>
+        </div>
+        <div style="padding:12px;background:var(--warn-dim);border-radius:8px;border:1px solid rgba(245,158,11,0.2)">
+          <div style="font-weight:700;color:var(--warn);margin-bottom:4px">3–5 Red Flags → SUSPICIOUS</div>
+          <div style="font-size:12px;color:var(--muted)">Warn the user. Advise them not to click anything. Escalate to IT.</div>
+        </div>
+        <div style="padding:12px;background:var(--danger-dim);border-radius:8px;border:1px solid rgba(239,68,68,0.2)">
+          <div style="font-weight:700;color:var(--danger);margin-bottom:4px">6+ Red Flags → MALICIOUS</div>
+          <div style="font-size:12px;color:var(--muted)">Block domain immediately. Escalate. Report via internal plugin.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== EMAIL ANALYZER ===== -->
+<div id="section-analyzer" class="section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Email Analyzer</h2>
+      <p>Paste a suspicious email to scan it for phishing indicators. Use the sample buttons to load real-world examples.</p>
+    </div>
+    
+    <div class="inner-tabs">
+      <button class="inner-tab active" onclick="showInnerTab('email-tab', this)">Email Analyzer</button>
+      <button class="inner-tab" onclick="showInnerTab('url-tab', this)">URL Inspector</button>
+    </div>
+
+    <div id="email-tab" class="inner-panel active">
+      <div class="analyzer-wrap">
+        <div class="email-input-area">
+          <div class="email-fields">
+            <div class="email-field">
+              <span class="field-lbl">From:</span>
+              <input class="field-input" id="email-from" placeholder="sender@domain.com" value="Microsoft Support &lt;security@micros0ft-alerts.com&gt;">
+            </div>
+            <div class="email-field">
+              <span class="field-lbl">Subject:</span>
+              <input class="field-input" id="email-subject" placeholder="Email subject line" value="URGENT: Your Account Will Be Suspended in 24 Hours">
+            </div>
+            <div class="email-field">
+              <span class="field-lbl">Reply-To:</span>
+              <input class="field-input" id="email-replyto" placeholder="reply-to address (if different)" value="noreply@login-secure-microsoft.net">
+            </div>
+          </div>
+          <div class="email-toolbar">
+            <span class="email-toolbar-label">Load sample:</span>
+            <button class="sample-btn" onclick="loadSample('bec')">BEC / Wire Transfer</button>
+            <button class="sample-btn" onclick="loadSample('microsoft')">Fake Microsoft</button>
+            <button class="sample-btn" onclick="loadSample('hr')">HR Impersonation</button>
+          </div>
+          <textarea class="email-body-input" id="email-body" placeholder="Paste the full email body here...">Dear Valued Customer,
+
+We have detected unusual login activity on your Microsoft account. Your account will be permanently suspended in 24 hours unless you verify your identity immediately.
+
+CLICK HERE TO VERIFY NOW: http://micros0ft-account-verify.com/secure/login
+
+This is URGENT. Failure to verify will result in permanent loss of access to all your Microsoft services including Outlook, Teams, and OneDrive.
+
+Do not share this email with anyone.
+
+Microsoft Security Team
+© 2026 Microsoft Corporation</textarea>
+          <button class="analyze-btn" onclick="analyzeEmail()"><i class="ti ti-search"></i> Analyze for Phishing</button>
+        </div>
+
+        <div class="result-panel">
+          <div class="result-header"><div class="result-header-text"><i class="ti ti-report-analytics"></i> Analysis Result</div></div>
+          
+          <div class="risk-meter">
+            <div class="risk-label"><span>Threat Level</span><span id="risk-pct">0%</span></div>
+            <div class="risk-bar"><div class="risk-fill" id="risk-fill" style="width:0%;background:var(--success)"></div></div>
+          </div>
+
+          <div class="verdict-area" id="verdict-area">
+            <div class="verdict-icon">🔍</div>
+            <div class="verdict-label" style="color:var(--muted)">Awaiting Analysis</div>
+            <div class="verdict-sub">Click "Analyze for Phishing" to scan this email</div>
+          </div>
+
+          <div class="findings-list" id="findings-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="url-tab" class="inner-panel">
+      <div class="url-input-row">
+        <input class="url-field" id="url-input" placeholder="Paste a suspicious URL here… e.g. http://www.decodelabs.tech.login-update.com/verify" value="http://www.decodelabs.tech.login-update.com/account/verify?token=abc123">
+        <button class="url-analyze-btn" onclick="analyzeUrl()"><i class="ti ti-search"></i> Inspect URL</button>
+      </div>
+      <div id="url-result" style="display:none">
+        <div class="url-breakdown" id="url-breakdown"></div>
+        <div id="url-findings"></div>
+      </div>
+      <div id="url-placeholder" class="card" style="text-align:center;padding:32px;color:var(--muted)">
+        <i class="ti ti-link" style="font-size:32px;display:block;margin-bottom:8px"></i>
+        Enter a URL above to inspect it for spoofing techniques
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PHISHING TYPES ===== -->
+<div id="section-types" class="section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Phishing Attack Taxonomy</h2>
+      <p>Understanding all attack vectors — phishing goes far beyond the email inbox.</p>
+    </div>
+
+    <div class="section-header" style="margin-bottom:16px"><h3 style="font-size:18px">By Targeting Level</h3></div>
+    <div class="type-card">
+      <div class="type-icon type-icon-blue"><i class="ti ti-users"></i></div>
+      <div class="type-body">
+        <div class="type-name">Mass Phishing <span class="targeting-badge target-mass">Mass</span></div>
+        <div class="type-desc">Generic lures mimicking ubiquitous brands like Amazon or PayPal. High volume, low personalization, roughly 1% engagement rate. The attacker casts a wide net hoping statistical chance yields victims.</div>
+        <div class="type-flags">
+          <span class="flag-tag">Generic greeting ("Dear Customer")</span>
+          <span class="flag-tag">Common brand impersonation</span>
+          <span class="flag-tag">Urgency language</span>
+          <span class="flag-tag">Suspicious link</span>
+        </div>
+      </div>
+    </div>
+    <div class="type-card">
+      <div class="type-icon type-icon-amber"><i class="ti ti-target"></i></div>
+      <div class="type-body">
+        <div class="type-name">Spear Phishing <span class="targeting-badge target-spear">Targeted</span></div>
+        <div class="type-desc">Contextual precision using OSINT (like LinkedIn) to reference specific project names, colleagues, or internal jargon. Makes the email feel highly credible and personally relevant to the victim.</div>
+        <div class="type-flags">
+          <span class="flag-tag">Uses victim's real name</span>
+          <span class="flag-tag">References real colleagues</span>
+          <span class="flag-tag">Internal jargon</span>
+          <span class="flag-tag">OSINT-derived context</span>
+        </div>
+      </div>
+    </div>
+    <div class="type-card">
+      <div class="type-icon type-icon-red"><i class="ti ti-crown"></i></div>
+      <div class="type-body">
+        <div class="type-name">Whaling (BEC) <span class="targeting-badge target-whale">Executive</span></div>
+        <div class="type-desc">Targeting the C-Suite. Focuses on founders and executives to execute high-value wire transfers (BEC) or acquire M&amp;A documents. The Quanta Computer exploit stole $100M from Google &amp; Facebook this way.</div>
+        <div class="type-flags">
+          <span class="flag-tag">CEO impersonation</span>
+          <span class="flag-tag">Wire transfer requests</span>
+          <span class="flag-tag">High secrecy demands</span>
+          <span class="flag-tag">Domain spoofing</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin:28px 0 16px"><h3 style="font-size:18px">By Attack Channel</h3></div>
+    <div class="grid-2">
+      <div class="type-card" style="margin-bottom:0">
+        <div class="type-icon type-icon-blue"><i class="ti ti-device-mobile-message"></i></div>
+        <div class="type-body">
+          <div class="type-name">Smishing (SMS)</div>
+          <div class="type-desc">Malicious links via text, often disguised as package deliveries or urgent bank alerts. Mobile users are less likely to inspect URLs carefully.</div>
+        </div>
+      </div>
+      <div class="type-card" style="margin-bottom:0">
+        <div class="type-icon type-icon-red"><i class="ti ti-phone-call"></i></div>
+        <div class="type-body">
+          <div class="type-name">Vishing (Voice)</div>
+          <div class="type-desc">Live calls using caller ID spoofing to impersonate IT support or government agencies. Creates real-time social pressure.</div>
+        </div>
+      </div>
+      <div class="type-card" style="margin-bottom:0">
+        <div class="type-icon type-icon-amber"><i class="ti ti-qrcode"></i></div>
+        <div class="type-body">
+          <div class="type-name">Quishing (QR Codes)</div>
+          <div class="type-desc">Malicious QR codes placed on physical posters or in digital PDFs, forcing users onto mobile devices where spoofed domains are harder to spot.</div>
+        </div>
+      </div>
+      <div class="type-card" style="margin-bottom:0">
+        <div class="type-icon type-icon-blue"><i class="ti ti-search"></i></div>
+        <div class="type-body">
+          <div class="type-name">Search Engine Phishing</div>
+          <div class="type-desc">SEO poisoning that manipulates search results to place malicious lookalike websites above legitimate login portals.</div>
+        </div>
+      </div>
+      <div class="type-card" style="margin-bottom:0">
+        <div class="type-icon type-icon-red"><i class="ti ti-phone"></i></div>
+        <div class="type-body">
+          <div class="type-name">TOAD / Callback Scams</div>
+          <div class="type-desc">Emails containing no malicious links — only a phone number urging you to call "Support" to resolve a fake subscription charge.</div>
+        </div>
+      </div>
+      <div class="type-card" style="margin-bottom:0">
+        <div class="type-icon type-icon-amber"><i class="ti ti-video"></i></div>
+        <div class="type-body">
+          <div class="type-name">Deepfake Live-Meeting Fraud</div>
+          <div class="type-desc">AI audio/video impersonation of an executive during an ad-hoc meeting, demanding mid-call vendor payment changes.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== RED FLAGS ===== -->
+<div id="section-redflags" class="section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Complete Red Flag Reference</h2>
+      <p>All 11 red flags from the DecodeLabs training kit — grouped by category for quick reference.</p>
+    </div>
+
+    <div class="section-header" style="margin-bottom:14px"><h3 style="font-size:16px;color:var(--muted)">Technical Red Flags (Email Header &amp; Links)</h3></div>
+    <div class="grid-2" style="margin-bottom:24px">
+      <div class="card" style="border-left:3px solid var(--danger)">
+        <h3><i class="ti ti-mail-exclamation" style="color:var(--danger);margin-right:6px"></i>RF-1: Sender-Domain Mismatch</h3>
+        <p>The display name conflicts with the actual routing domain. E.g. "Microsoft Support" sending from hacker@gmail.com. Always expand the From field.</p>
+      </div>
+      <div class="card" style="border-left:3px solid var(--danger)">
+        <h3><i class="ti ti-link-off" style="color:var(--danger);margin-right:6px"></i>RF-2: Suspicious / Spoofed URLs</h3>
+        <p>Typosquatting (amaz0n.com), homoglyph attacks (Cyrillic chars), combosquatting (yourcompany-secure-login.com). Always read URLs right-to-left.</p>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-bottom:14px"><h3 style="font-size:16px;color:var(--muted)">Domain Spoofing Techniques</h3></div>
+    <div class="domain-compare" style="margin-bottom:16px">
+      <h3 style="margin-bottom:16px;font-size:14px">Visual lookalike domain comparison</h3>
+      <div class="domain-row">
+        <span class="domain-label">Real</span>
+        <span class="domain-val domain-real">amazon.com</span>
+        <span class="domain-type-label" style="background:var(--success-dim);color:var(--success);margin-left:auto">Legitimate</span>
+      </div>
+      <div class="domain-row">
+        <span class="domain-label">Fake</span>
+        <span class="domain-val domain-fake">amaz<span class="domain-highlight">0</span>n.com</span>
+        <span class="domain-type-label badge-red" style="margin-left:auto">Typosquatting</span>
+      </div>
+      <div style="height:1px;background:var(--border);margin:12px 0"></div>
+      <div class="domain-row">
+        <span class="domain-label">Real</span>
+        <span class="domain-val domain-real">paypal.com</span>
+        <span class="domain-type-label" style="background:var(--success-dim);color:var(--success);margin-left:auto">Legitimate</span>
+      </div>
+      <div class="domain-row">
+        <span class="domain-label">Fake</span>
+        <span class="domain-val domain-fake">p<span class="domain-highlight">а</span>ypal.com</span>
+        <span class="domain-type-label badge-amber" style="margin-left:auto">Homoglyph (Cyrillic а)</span>
+      </div>
+      <div style="height:1px;background:var(--border);margin:12px 0"></div>
+      <div class="domain-row">
+        <span class="domain-label">Real</span>
+        <span class="domain-val domain-real">yourcompany.com</span>
+        <span class="domain-type-label" style="background:var(--success-dim);color:var(--success);margin-left:auto">Legitimate</span>
+      </div>
+      <div class="domain-row">
+        <span class="domain-label">Fake</span>
+        <span class="domain-val domain-fake">yourcompany-<span class="domain-highlight">secure-login</span>.com</span>
+        <span class="domain-type-label badge-red" style="margin-left:auto">Combosquatting</span>
+      </div>
+      <div style="height:1px;background:var(--border);margin:12px 0"></div>
+      <div class="domain-row">
+        <span class="domain-label">Trap</span>
+        <span class="domain-val" style="color:var(--danger)">www.<span style="color:var(--warn)">decodelabs.tech</span>.<span style="color:var(--danger)">login-update.com</span></span>
+        <span class="domain-type-label badge-red" style="margin-left:auto">Subdomain Trap</span>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:6px">← Read right to left: true root domain is login-update.com. "decodelabs.tech" is just a fake subdomain.</p>
+    </div>
+
+    <div class="section-header" style="margin-bottom:14px"><h3 style="font-size:16px;color:var(--muted)">Cognitive &amp; Psychological Triggers</h3></div>
+    <div class="trigger-grid" style="margin-bottom:24px">
+      <div class="trigger-card">
+        <div class="t-icon" style="color:var(--accent)"><i class="ti ti-building-bank"></i></div>
+        <div class="t-name">Authority</div>
+        <div class="t-desc">Impersonating the C-suite, IT department, or law enforcement to demand unquestioned compliance. Bypasses critical thinking through social hierarchy.</div>
+        <div class="t-example">"This is your CEO. Process this wire transfer immediately and do not speak to anyone about it."</div>
+      </div>
+      <div class="trigger-card">
+        <div class="t-icon" style="color:var(--danger)"><i class="ti ti-clock-exclamation"></i></div>
+        <div class="t-name">Urgency</div>
+        <div class="t-desc">Creating artificial time pressure to trigger a fight-or-flight response, reducing rational processing and forcing hasty decisions.</div>
+        <div class="t-example">"Your account will be locked in 30 minutes unless you verify now. Act immediately."</div>
+      </div>
+      <div class="trigger-card">
+        <div class="t-icon" style="color:var(--warn)"><i class="ti ti-eye"></i></div>
+        <div class="t-name">Curiosity</div>
+        <div class="t-desc">Exploiting the human need to fill knowledge gaps. Creates an irresistible pull to find out what "they" said or what secret document awaits.</div>
+        <div class="t-example">"See what your colleague said about you in this shared document [link]"</div>
+      </div>
+      <div class="trigger-card">
+        <div class="t-icon" style="color:var(--success)"><i class="ti ti-scale"></i></div>
+        <div class="t-name">Fear / Greed</div>
+        <div class="t-desc">Threatening negative consequences (legal action, account closure, financial penalty) or promising unearned rewards (prize winners, refunds).</div>
+        <div class="t-example">"You have been selected for a $1,000 gift card. Claim now — expires in 1 hour."</div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-bottom:14px"><h3 style="font-size:16px;color:var(--muted)">Contextual &amp; Modern Red Flags (RF 5–11)</h3></div>
+    <div class="grid-2">
+      <div class="card"><h3 style="color:var(--warn)">RF-5: Urgent Bypass Requests</h3><p>Demands for secrecy or explicit instructions to bypass normal procurement/security procedures.</p></div>
+      <div class="card"><h3 style="color:var(--warn)">RF-6: Requests for Sensitive Info</h3><p>Unexpected prompts for MFA codes, passwords, or payment detail changes over email.</p></div>
+      <div class="card"><h3 style="color:var(--accent)">RF-7: Activity Alerts</h3><p>Alarmist unusual sign-in warnings that point directly to a login page instead of advising manual navigation.</p></div>
+      <div class="card"><h3 style="color:var(--accent)">RF-8: MFA Fatigue</h3><p>Multiple, unprompted authenticator push notifications designed to wear the user down until they hit Approve.</p></div>
+      <div class="card"><h3 style="color:var(--danger)">RF-9: Security Callback Scams (TOAD)</h3><p>Emails with only a phone number urging you to call Support about a fake subscription charge — no malicious link.</p></div>
+      <div class="card"><h3 style="color:var(--danger)">RF-10: QR Code Prompts</h3><p>Unsolicited QR codes demanding a scan to secure your account, bypassing desktop URL filters entirely.</p></div>
+    </div>
+    <div class="card" style="margin-top:12px"><h3 style="color:var(--danger)">RF-11: Deepfake Live-Meeting Fraud</h3><p>Audio or video impersonation of an executive during an ad-hoc meeting, demanding mid-call vendor payment changes. Verify independently before any action.</p></div>
+  </div>
+</div>
+
+<!-- ===== SIMULATIONS ===== -->
+<div id="section-simulations" class="section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Phishing Simulation Templates</h2>
+      <p>Real-world phishing scenarios from the 2026 simulation toolkit — analyze each for red flags and explain why it's unsafe.</p>
+    </div>
+
+    <div class="sim-card">
+      <div class="sim-header">
+        <span class="sim-title">Scenario 1 — Business Email Compromise (BEC): The Lost Wallet</span>
+        <span class="sim-level badge-red">Whaling / BEC</span>
+      </div>
+      <div class="sim-body">
+        <div class="sim-email">
+<span style="color:var(--muted)">From:</span>    <span class="sender">CEO — STRICTLY CONFIDENTIAL &lt;ceo.urgent@executive-update.com&gt;</span>
+<span style="color:var(--muted)">Subject:</span> <span class="subject">IMMEDIATE ACTION REQUIRED: Transfer Authorization</span>
+
+<span class="urgency">URGENT:</span> I lost my wallet at the airport. Need you to wire transfer funds for my flight immediately.
+
+This is critical and must remain <span class="urgency">STRICTLY CONFIDENTIAL</span>.
+Do not discuss with anyone. Bypass standard procedure. Thank you.
+
+— CEO</div>
+        <div class="sim-analysis">
+          <div class="sim-analysis-title">Red Flags Identified</div>
+          <div class="flags-grid">
+            <div class="flag-item"><div class="flag-num">1</div><div class="flag-text"><strong>Sender domain mismatch</strong>executive-update.com ≠ company domain</div></div>
+            <div class="flag-item"><div class="flag-num">2</div><div class="flag-text"><strong>Urgency trigger</strong>Artificial time pressure via lost wallet story</div></div>
+            <div class="flag-item"><div class="flag-num">3</div><div class="flag-text"><strong>Secrecy demand</strong>"Do not discuss with anyone"</div></div>
+            <div class="flag-item"><div class="flag-num">4</div><div class="flag-text"><strong>Procedure bypass</strong>"Bypass standard procedure"</div></div>
+            <div class="flag-item"><div class="flag-num">5</div><div class="flag-text"><strong>Authority trigger</strong>CEO impersonation for compliance</div></div>
+            <div class="flag-item"><div class="flag-num">6</div><div class="flag-text"><strong>Wire transfer request</strong>Irreversible financial action via email</div></div>
+          </div>
+          <div class="verdict-row">
+            <span class="verdict-chip chip-malicious">MALICIOUS</span>
+            <span class="verdict-action-text">→ Block domain executive-update.com. Report to security team. Verify CEO location via separate trusted channel.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sim-card">
+      <div class="sim-header">
+        <span class="sim-title">Scenario 2 — Fake Microsoft Security Alert</span>
+        <span class="sim-level badge-amber">Mass Phishing</span>
+      </div>
+      <div class="sim-body">
+        <div class="sim-email">
+<span style="color:var(--muted)">From:</span>    <span class="sender">Microsoft Support &lt;support@logins-updates.com&gt;</span>
+<span style="color:var(--muted)">Subject:</span> <span class="subject">FW: Urgent: Your Account Security Alert</span>
+
+Your Microsoft account has been compromised. Verify now or lose access permanently.
+
+Sign in immediately: <span class="danger-link">http://microsofft-secure-login.net/verify</span>
+
+Attachment: Security_Update_2024.ise</div>
+        <div class="sim-analysis">
+          <div class="sim-analysis-title">Red Flags Identified</div>
+          <div class="flags-grid">
+            <div class="flag-item"><div class="flag-num">1</div><div class="flag-text"><strong>Domain mismatch</strong>logins-updates.com is not microsoft.com</div></div>
+            <div class="flag-item"><div class="flag-num">2</div><div class="flag-text"><strong>Typosquatted link</strong>"microsofft" has double-f in URL</div></div>
+            <div class="flag-item"><div class="flag-num">3</div><div class="flag-text"><strong>Fake forward (FW:)</strong>Adds false credibility</div></div>
+            <div class="flag-item"><div class="flag-num">4</div><div class="flag-text"><strong>Dangerous attachment</strong>.ise is an unusual/executable extension</div></div>
+            <div class="flag-item"><div class="flag-num">5</div><div class="flag-text"><strong>Fear/urgency trigger</strong>"lose access permanently"</div></div>
+            <div class="flag-item"><div class="flag-num">6</div><div class="flag-text"><strong>Embedded login link</strong>Should navigate to Microsoft manually</div></div>
+          </div>
+          <div class="verdict-row">
+            <span class="verdict-chip chip-malicious">MALICIOUS</span>
+            <span class="verdict-action-text">→ Block logins-updates.com and microsofft-secure-login.net. Do NOT open attachment. Escalate immediately.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sim-card">
+      <div class="sim-header">
+        <span class="sim-title">Scenario 3 — HR Policy Update (Routine Internal Impersonation)</span>
+        <span class="sim-level badge-amber">Spear Phishing</span>
+      </div>
+      <div class="sim-body">
+        <div class="sim-email">
+<span style="color:var(--muted)">From:</span>    <span class="sender">Human Resources &lt;hr@yourcompany-benefits2026.com&gt;</span>
+<span style="color:var(--muted)">Subject:</span> <span class="subject">Action Required: 2026 Healthcare Benefits Questionnaire</span>
+
+Hi Team,
+
+Please complete the mandatory 2026 healthcare benefits questionnaire by Friday.
+Failure to complete will result in loss of benefits coverage.
+
+Complete here: <span class="danger-link">http://yourcompany-benefits2026.com/portal/login</span>
+
+Human Resources Department</div>
+        <div class="sim-analysis">
+          <div class="sim-analysis-title">Red Flags Identified</div>
+          <div class="flags-grid">
+            <div class="flag-item"><div class="flag-num">1</div><div class="flag-text"><strong>Combosquatting</strong>yourcompany-benefits2026.com is not the real HR domain</div></div>
+            <div class="flag-item"><div class="flag-num">2</div><div class="flag-text"><strong>Fear trigger</strong>"loss of benefits coverage"</div></div>
+            <div class="flag-item"><div class="flag-num">3</div><div class="flag-text"><strong>Credential harvesting link</strong>Portal login = stealing your SSO credentials</div></div>
+            <div class="flag-item"><div class="flag-num">4</div><div class="flag-text"><strong>Deadline pressure</strong>Artificial urgency via "by Friday"</div></div>
+          </div>
+          <div class="verdict-row">
+            <span class="verdict-chip chip-suspicious">SUSPICIOUS</span>
+            <span class="verdict-action-text">→ Warn user. Do NOT click the link. Verify directly with HR via internal directory. Escalate for domain check.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sim-card">
+      <div class="sim-header">
+        <span class="sim-title">Scenario 4 — Deepfake Voice + Callback (Multi-Channel)</span>
+        <span class="sim-level" style="background:var(--accent-dim);color:var(--accent);font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px">Advanced</span>
+      </div>
+      <div class="sim-body">
+        <div class="sim-email">
+<span style="color:var(--muted)">From:</span>    <span class="sender">[Director Name] &lt;d.chen@yourcompany-corp.net&gt;</span>
+<span style="color:var(--muted)">Subject:</span> <span class="subject">Re: My Voice Message</span>
+
+Hi,
+
+Just left you a voicemail regarding the urgent request we discussed.
+Please confirm the vendor payment change ASAP.
+
+Thanks,
+[Director Name]</div>
+        <div class="sim-analysis">
+          <div class="sim-analysis-title">Red Flags Identified</div>
+          <div class="flags-grid">
+            <div class="flag-item"><div class="flag-num">1</div><div class="flag-text"><strong>Domain mismatch</strong>yourcompany-corp.net ≠ real domain</div></div>
+            <div class="flag-item"><div class="flag-num">2</div><div class="flag-text"><strong>AI-generated voicemail</strong>Deepfake voice to build false credibility</div></div>
+            <div class="flag-item"><div class="flag-num">3</div><div class="flag-text"><strong>Multi-channel attack</strong>Voice + email reinforcing each other</div></div>
+            <div class="flag-item"><div class="flag-num">4</div><div class="flag-text"><strong>Payment change request</strong>Classic BEC objective via social engineering</div></div>
+            <div class="flag-item"><div class="flag-num">5</div><div class="flag-text"><strong>References a "discussion"</strong>False shared context to lower guard</div></div>
+          </div>
+          <div class="verdict-row">
+            <span class="verdict-chip chip-malicious">MALICIOUS</span>
+            <span class="verdict-action-text">→ Block domain. NEVER process vendor payment changes without in-person or verified-call confirmation. Report immediately.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== DECISION TREE ===== -->
+<div id="section-decision" class="section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Phishing Triage Decision Tree</h2>
+      <p>A clear, step-by-step guide for classifying and actioning any suspicious message.</p>
+    </div>
+    
+    <div class="tree-wrap">
+      <svg class="tree-svg" viewBox="0 0 1060 820" xmlns="http://www.w3.org/2000/svg" style="background:transparent">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+        </defs>
+
+        <!-- STEP 0: Start -->
+        <rect x="380" y="20" width="300" height="52" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="530" y="41" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="600" font-family="system-ui">INCOMING SUSPICIOUS MESSAGE</text>
+        <text x="530" y="58" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Email / SMS / Voice / QR Code / Meeting Request</text>
+
+        <line x1="530" y1="72" x2="530" y2="108" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- STEP 1: Sender Check -->
+        <rect x="355" y="110" width="350" height="60" rx="10" fill="#1a1e2e" stroke="#6366f1" stroke-width="1.5"/>
+        <text x="530" y="133" text-anchor="middle" fill="#a5b4fc" font-size="12" font-weight="600" font-family="system-ui">Step 1: Inspect Sender Identity</text>
+        <text x="530" y="151" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Does display name match actual domain? Any domain spoofing?</text>
+        <text x="530" y="163" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Read the From header, expand it on mobile</text>
+
+        <!-- Step 1 branches -->
+        <line x1="355" y1="140" x2="245" y2="140" stroke="#4b5563" stroke-width="1" stroke-dasharray="4 3"/>
+        <line x1="245" y1="140" x2="245" y2="218" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="300" y="135" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="600" font-family="system-ui">Matches</text>
+        
+        <line x1="705" y1="140" x2="815" y2="140" stroke="#4b5563" stroke-width="1" stroke-dasharray="4 3"/>
+        <line x1="815" y1="140" x2="815" y2="218" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="760" y="135" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="600" font-family="system-ui">MISMATCH !</text>
+
+        <line x1="530" y1="170" x2="530" y2="218" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- STEP 2: URL Check -->
+        <rect x="355" y="220" width="350" height="60" rx="10" fill="#1a1e2e" stroke="#8b5cf6" stroke-width="1.5"/>
+        <text x="530" y="243" text-anchor="middle" fill="#c4b5fd" font-size="12" font-weight="600" font-family="system-ui">Step 2: Inspect All Links</text>
+        <text x="530" y="261" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Hover / long-press links. Read URL right-to-left.</text>
+        <text x="530" y="273" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Typosquatting? Homoglyphs? Subdomain trap?</text>
+
+        <line x1="530" y1="280" x2="530" y2="328" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- STEP 3: Cognitive Trigger -->
+        <rect x="355" y="330" width="350" height="60" rx="10" fill="#1a1e2e" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="530" y="353" text-anchor="middle" fill="#fde68a" font-size="12" font-weight="600" font-family="system-ui">Step 3: Identify Psychological Trigger</text>
+        <text x="530" y="371" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Urgency / Authority / Curiosity / Fear / Greed?</text>
+        <text x="530" y="383" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">If a trigger is present: PAUSE. Apply 5-Minute Rule.</text>
+
+        <line x1="530" y1="390" x2="530" y2="438" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- STEP 4: Content + Attachments -->
+        <rect x="355" y="440" width="350" height="60" rx="10" fill="#1a1e2e" stroke="#ec4899" stroke-width="1.5"/>
+        <text x="530" y="463" text-anchor="middle" fill="#f9a8d4" font-size="12" font-weight="600" font-family="system-ui">Step 4: Check Content &amp; Attachments</text>
+        <text x="530" y="481" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Requests for secrecy / procedure bypass?</text>
+        <text x="530" y="493" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Suspicious .iso .js .scr files? Fake forwarded chains?</text>
+
+        <line x1="530" y1="500" x2="530" y2="548" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- STEP 5: Count red flags -->
+        <rect x="380" y="550" width="300" height="48" rx="10" fill="#2d1b44" stroke="#9333ea" stroke-width="1.5"/>
+        <text x="530" y="569" text-anchor="middle" fill="#d8b4fe" font-size="12" font-weight="600" font-family="system-ui">Count Total Red Flags Found</text>
+        <text x="530" y="586" text-anchor="middle" fill="#9f7aea" font-size="10" font-family="system-ui">0–2  ·  3–5  ·  6+</text>
+
+        <!-- 3 branches from count -->
+        <!-- SAFE branch -->
+        <line x1="380" y1="574" x2="155" y2="574" stroke="#4b5563" stroke-width="1" stroke-dasharray="4 3"/>
+        <line x1="155" y1="574" x2="155" y2="658" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="268" y="566" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="700" font-family="system-ui">0–2 flags</text>
+
+        <!-- SUSPICIOUS branch -->
+        <line x1="530" y1="598" x2="530" y2="658" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="560" y="634" text-anchor="start" fill="#f59e0b" font-size="10" font-weight="700" font-family="system-ui">3–5 flags</text>
+
+        <!-- MALICIOUS branch -->
+        <line x1="680" y1="574" x2="905" y2="574" stroke="#4b5563" stroke-width="1" stroke-dasharray="4 3"/>
+        <line x1="905" y1="574" x2="905" y2="658" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="792" y="566" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="700" font-family="system-ui">6+ flags</text>
+
+        <!-- OUTCOME BOXES -->
+        <!-- SAFE -->
+        <rect x="60" y="660" width="190" height="100" rx="10" fill="#052e16" stroke="#22c55e" stroke-width="2"/>
+        <text x="155" y="683" text-anchor="middle" fill="#22c55e" font-size="13" font-weight="700" font-family="system-ui">✓ SAFE</text>
+        <text x="155" y="700" text-anchor="middle" fill="#86efac" font-size="10" font-family="system-ui">Close the ticket</text>
+        <text x="155" y="716" text-anchor="middle" fill="#4ade80" font-size="10" font-weight="600" font-family="system-ui">ACTION: Close</text>
+        <text x="155" y="732" text-anchor="middle" fill="#64748b" font-size="9.5" font-family="system-ui">Log for metrics reporting</text>
+        <text x="155" y="748" text-anchor="middle" fill="#64748b" font-size="9.5" font-family="system-ui">No further action needed</text>
+
+        <!-- SUSPICIOUS -->
+        <rect x="380" y="660" width="300" height="100" rx="10" fill="#2c1a00" stroke="#f59e0b" stroke-width="2"/>
+        <text x="530" y="683" text-anchor="middle" fill="#f59e0b" font-size="13" font-weight="700" font-family="system-ui">⚠ SUSPICIOUS</text>
+        <text x="530" y="700" text-anchor="middle" fill="#fde68a" font-size="10" font-family="system-ui">Warn the user immediately</text>
+        <text x="530" y="716" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="600" font-family="system-ui">ACTION: Warn User</text>
+        <text x="530" y="732" text-anchor="middle" fill="#64748b" font-size="9.5" font-family="system-ui">Advise: do not click any links</text>
+        <text x="530" y="748" text-anchor="middle" fill="#64748b" font-size="9.5" font-family="system-ui">Escalate to IT security team</text>
+
+        <!-- MALICIOUS -->
+        <rect x="810" y="660" width="190" height="100" rx="10" fill="#1a0000" stroke="#ef4444" stroke-width="2"/>
+        <text x="905" y="683" text-anchor="middle" fill="#ef4444" font-size="13" font-weight="700" font-family="system-ui">✗ MALICIOUS</text>
+        <text x="905" y="700" text-anchor="middle" fill="#fca5a5" font-size="10" font-family="system-ui">Block domain &amp; escalate</text>
+        <text x="905" y="716" text-anchor="middle" fill="#f87171" font-size="10" font-weight="600" font-family="system-ui">ACTION: Block &amp; Escalate</span></text>
+        <text x="905" y="732" text-anchor="middle" fill="#64748b" font-size="9.5" font-family="system-ui">Report via internal plugin</text>
+        <text x="905" y="748" text-anchor="middle" fill="#64748b" font-size="9.5" font-family="system-ui">Purge from all inboxes</text>
+
+        <!-- Side flags from step 1 -->
+        <rect x="140" y="220" width="210" height="48" rx="8" fill="#1a1e2e" stroke="#22c55e" stroke-width="1"/>
+        <text x="245" y="240" text-anchor="middle" fill="#86efac" font-size="10" font-weight="600" font-family="system-ui">Low suspicion — continue</text>
+        <text x="245" y="256" text-anchor="middle" fill="#64748b" font-size="9.5" font-family="system-ui">Proceed to URL &amp; content checks</text>
+        <line x1="245" y1="268" x2="355" y2="268" stroke="#4b5563" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+
+        <rect x="710" y="220" width="210" height="48" rx="8" fill="#1a1e2e" stroke="#ef4444" stroke-width="1"/>
+        <text x="815" y="240" text-anchor="middle" fill="#fca5a5" font-size="10" font-weight="600" font-family="system-ui">Confirmed red flag (+2 pts)</text>
+        <text x="815" y="256" text-anchor="middle" fill="#64748b" font-size="9.5" font-family="system-ui">Continue checking for more flags</text>
+        <line x1="710" y1="244" x2="705" y2="244" stroke="#4b5563" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+
+        <!-- Legend -->
+        <rect x="40" y="20" width="290" height="70" rx="8" fill="#13161b" stroke="#374151" stroke-width="0.5"/>
+        <text x="55" y="38" fill="#94a3b8" font-size="10" font-weight="600" font-family="system-ui">LEGEND</text>
+        <rect x="55" y="46" width="8" height="8" rx="2" fill="#6366f1"/>
+        <text x="70" y="55" fill="#64748b" font-size="9.5" font-family="system-ui">Inspection step</text>
+        <rect x="55" y="62" width="8" height="8" rx="2" fill="#22c55e"/>
+        <text x="70" y="71" fill="#64748b" font-size="9.5" font-family="system-ui">Safe / low-risk path</text>
+        <rect x="155" y="46" width="8" height="8" rx="2" fill="#ef4444"/>
+        <text x="170" y="55" fill="#64748b" font-size="9.5" font-family="system-ui">Malicious indicator</text>
+        <rect x="155" y="62" width="8" height="8" rx="2" fill="#f59e0b"/>
+        <text x="170" y="71" fill="#64748b" font-size="9.5" font-family="system-ui">Suspicious indicator</text>
+      </svg>
+    </div>
+
+    <div style="margin-top:20px" class="grid-3">
+      <div style="background:var(--success-dim);border:1px solid rgba(34,197,94,0.3);border-radius:var(--radius);padding:16px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--success);margin-bottom:4px">SAFE → CLOSE</div>
+        <div style="font-size:12px;color:var(--muted)">0–2 red flags. No action. Log for security metrics.</div>
+      </div>
+      <div style="background:var(--warn-dim);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius);padding:16px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--warn);margin-bottom:4px">SUSPICIOUS → WARN</div>
+        <div style="font-size:12px;color:var(--muted)">3–5 red flags. Warn user. Advise no clicks. Escalate to IT.</div>
+      </div>
+      <div style="background:var(--danger-dim);border:1px solid rgba(239,68,68,0.3);border-radius:var(--radius);padding:16px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--danger);margin-bottom:4px">MALICIOUS → BLOCK</div>
+        <div style="font-size:12px;color:var(--muted)">6+ red flags. Block domain. Report. Purge from all inboxes.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  DecodeLabs Cyber Security — Project 3: Phishing Awareness Analysis · Batch 2026 · 
+  Built using the PhishGuard Triage Toolkit framework
+</footer>
+
+<script>
+// ===== NAVIGATION =====
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('section-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+function showInnerTab(panelId, btn) {
+  const wrap = btn.closest('.container') || btn.parentElement.parentElement;
+  wrap.querySelectorAll('.inner-tab').forEach(t => t.classList.remove('active'));
+  wrap.querySelectorAll('.inner-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+}
+
+// ===== CHECKLIST =====
+function toggleCheck(el) {
+  el.classList.toggle('checked');
+  updateProgress();
+}
+function updateProgress() {
+  const items = document.querySelectorAll('.rf-item');
+  const checked = document.querySelectorAll('.rf-item.checked').length;
+  const pct = Math.round((checked / items.length) * 100);
+  document.getElementById('checklist-progress').style.width = pct + '%';
+  document.getElementById('progress-count').textContent = checked + ' / ' + items.length;
+}
+function resetChecklist() {
+  document.querySelectorAll('.rf-item').forEach(el => el.classList.remove('checked'));
+  updateProgress();
+}
+
+// ===== EMAIL ANALYZER =====
+const samples = {
+  bec: {
+    from: "CEO — STRICTLY CONFIDENTIAL <ceo.urgent@executive-update.com>",
+    subject: "IMMEDIATE ACTION REQUIRED: Transfer Authorization",
+    replyto: "wire@executive-update.com",
+    body: "I lost my wallet at the airport. Need you to wire transfer funds for my flight immediately.\n\nThis is critical and must remain STRICTLY CONFIDENTIAL.\nDo not discuss with anyone. Bypass standard procedure. Thank you.\n\n— CEO"
+  },
+  microsoft: {
+    from: "Microsoft Support <support@logins-updates.com>",
+    subject: "FW: Urgent: Your Account Security Alert",
+    replyto: "",
+    body: "Dear User,\n\nYour Microsoft account has been compromised. Verify now or lose access permanently.\n\nSign in immediately: http://microsofft-secure-login.net/verify\n\nAttachment: Security_Update_2024.ise"
+  },
+  hr: {
+    from: "Human Resources <hr@yourcompany-benefits2026.com>",
+    subject: "Action Required: 2026 Healthcare Benefits Questionnaire",
+    replyto: "hr-noreply@yourcompany-benefits2026.com",
+    body: "Hi Team,\n\nPlease complete the mandatory 2026 healthcare benefits questionnaire by Friday.\nFailure to complete will result in loss of benefits coverage.\n\nComplete here: http://yourcompany-benefits2026.com/portal/login\n\nHuman Resources Department"
+  }
+};
+
+function loadSample(type) {
+  const s = samples[type];
+  document.getElementById('email-from').value = s.from;
+  document.getElementById('email-subject').value = s.subject;
+  document.getElementById('email-replyto').value = s.replyto;
+  document.getElementById('email-body').value = s.body;
+}
+
+function analyzeEmail() {
+  const from = document.getElementById('email-from').value.toLowerCase();
+  const subject = document.getElementById('email-subject').value.toLowerCase();
+  const replyto = document.getElementById('email-replyto').value.toLowerCase();
+  const body = document.getElementById('email-body').value.toLowerCase();
+
+  const findings = [];
+  let score = 0;
+
+  // Domain mismatch check
+  const domainMatch = from.match(/<([^@]+@([^>]+))>/);
+  if (domainMatch) {
+    const emailDomain = domainMatch[2];
+    const brandNames = ['microsoft', 'google', 'amazon', 'paypal', 'apple', 'facebook', 'ceo', 'hr', 'human resources'];
+    const displayName = from.split('<')[0].toLowerCase();
+    const isMismatch = brandNames.some(b => displayName.includes(b)) && !emailDomain.includes(b);
+    if (isMismatch || emailDomain.includes('gmail') || emailDomain.includes('yahoo')) {
+      findings.push({ sev: 'red', title: 'Sender-domain mismatch', detail: 'Display name does not match the sending domain.' });
+      score += 25;
+    }
+  }
+
+  // Typosquatting in from/replyto
+  const typosquat = ['micros0ft','microsofft','g00gle','amaz0n','paypa1','decodelabs.tech.','executive-update','logins-updates','benefits2026'];
+  typosquat.forEach(t => {
+    if (from.includes(t) || replyto.includes(t) || body.includes(t)) {
+      findings.push({ sev: 'red', title: 'Suspicious domain detected', detail: `"${t}" found — possible typosquatting or combosquatting.` });
+      score += 20;
+    }
+  });
+
+  // Reply-to mismatch
+  if (replyto && domainMatch) {
+    const fromDom = domainMatch[2];
+    const rtDomain = replyto.match(/@([^\s>]+)/)?.[1];
+    if (rtDomain && rtDomain !== fromDom) {
+      findings.push({ sev: 'red', title: 'Reply-To domain mismatch', detail: 'Reply-To address points to a different domain than the From header.' });
+      score += 15;
+    }
+  }
+
+  // Urgency keywords
+  const urgencyWords = ['urgent','immediate','immediately','act now','24 hours','suspended','permanently','expires','warning','critical','asap'];
+  const foundUrgency = urgencyWords.filter(w => subject.includes(w) || body.includes(w));
+  if (foundUrgency.length > 0) {
+    findings.push({ sev: 'amber', title: 'Urgency trigger detected', detail: `Pressure words found: ${foundUrgency.slice(0,3).join(', ')}` });
+    score += 10;
+  }
+
+  // Secrecy / bypass
+  const secrecyWords = ['confidential','do not discuss','bypass','do not share','tell no one','keep secret','without informing'];
+  if (secrecyWords.some(w => body.includes(w))) {
+    findings.push({ sev: 'red', title: 'Secrecy / bypass demand', detail: 'Message demands secrecy or bypassing normal procedures — a hallmark of BEC.' });
+    score += 20;
+  }
+
+  // Wire transfer / financial
+  if (body.includes('wire') || body.includes('transfer') || body.includes('payment') || body.includes('billing')) {
+    findings.push({ sev: 'amber', title: 'Financial action requested', detail: 'Email requests wire transfer, payment, or billing update — verify through a trusted channel.' });
+    score += 10;
+  }
+
+  // Suspicious attachments
+  const dangerExt = ['.iso','.js','.scr','.hta','.vbs','.exe','.ise'];
+  dangerExt.forEach(ext => {
+    if (body.includes(ext)) {
+      findings.push({ sev: 'red', title: 'Dangerous attachment detected', detail: `"${ext}" is a potentially executable file type — do NOT open.` });
+      score += 20;
+    }
+  });
+
+  // Suspicious links
+  const suspLinks = ['http://','verify','secure','login','account','update','confirm'];
+  const linkFound = suspLinks.filter(w => body.includes(w));
+  if (linkFound.includes('http://')) {
+    findings.push({ sev: 'amber', title: 'Unencrypted HTTP link', detail: 'HTTP links (not HTTPS) are insecure and suspicious.' });
+    score += 10;
+  }
+  if (linkFound.length > 2) {
+    findings.push({ sev: 'amber', title: 'Credential-harvesting link keywords', detail: `Link contains: ${linkFound.filter(w=>w!=='http://').slice(0,3).join(', ')}` });
+    score += 10;
+  }
+
+  // FW: trick
+  if (subject.startsWith('fw:') || subject.startsWith('fwd:')) {
+    findings.push({ sev: 'amber', title: 'Fake forwarded chain (FW:)', detail: 'Forwarded subject lines can fabricate context and false legitimacy.' });
+    score += 10;
+  }
+
+  score = Math.min(score, 100);
+  displayResult(score, findings);
+}
+
+function displayResult(score, findings) {
+  const pct = document.getElementById('risk-pct');
+  const fill = document.getElementById('risk-fill');
+  const verdictArea = document.getElementById('verdict-area');
+  const findingsList = document.getElementById('findings-list');
+
+  pct.textContent = score + '%';
+  fill.style.width = score + '%';
+  if (score < 35) {
+    fill.style.background = 'var(--success)';
+  } else if (score < 65) {
+    fill.style.background = 'var(--warn)';
+  } else {
+    fill.style.background = 'var(--danger)';
+  }
+
+  let verdict, icon, action, actionClass;
+  if (score < 35 && findings.length < 2) {
+    verdict = 'SAFE'; icon = '✅'; action = '→ Close ticket. No action required. Log for metrics.'; actionClass = 'action-safe';
+  } else if (score < 65) {
+    verdict = 'SUSPICIOUS'; icon = '⚠️'; action = '→ Warn user. Advise no clicks. Escalate to IT security.'; actionClass = 'action-suspicious';
+  } else {
+    verdict = 'MALICIOUS'; icon = '🚨'; action = '→ Block domain. Report via plugin. Purge from all inboxes.'; actionClass = 'action-malicious';
+  }
+
+  verdictArea.innerHTML = `
+    <div class="verdict-icon">${icon}</div>
+    <div class="verdict-label ${verdict.toLowerCase()}">${verdict}</div>
+    <div class="verdict-sub">Threat score: ${score}/100 · ${findings.length} indicator${findings.length !== 1 ? 's' : ''} found</div>
+    <div class="verdict-action ${actionClass}">${action}</div>
+  `;
+
+  findingsList.innerHTML = findings.map(f => `
+    <div class="finding-item">
+      <div class="finding-dot dot-${f.sev === 'red' ? 'red' : f.sev === 'amber' ? 'amber' : 'green'}"></div>
+      <div class="finding-text"><strong>${f.title}</strong>${f.detail}</div>
+    </div>
+  `).join('') || '<div class="finding-item"><div class="finding-dot dot-green"></div><div class="finding-text"><strong>No significant threats detected</strong>Message appears legitimate.</div></div>';
+}
+
+// ===== URL ANALYZER =====
+function analyzeUrl() {
+  const raw = document.getElementById('url-input').value.trim();
+  if (!raw) return;
+
+  const placeholder = document.getElementById('url-placeholder');
+  const resultDiv = document.getElementById('url-result');
+  placeholder.style.display = 'none';
+  resultDiv.style.display = 'block';
+
+  // Parse URL
+  let scheme = '', host = '', path = '';
+  const schemeMatch = raw.match(/^(https?:\/\/)/i);
+  if (schemeMatch) { scheme = schemeMatch[1]; host = raw.slice(scheme.length); }
+  else { host = raw; }
+  const slashIdx = host.indexOf('/');
+  if (slashIdx > -1) { path = host.slice(slashIdx); host = host.slice(0, slashIdx); }
+
+  const hostParts = host.split('.');
+  const tld = '.' + hostParts.pop();
+  const domain = hostParts.pop() || '';
+  const subdomains = hostParts.join('.');
+
+  const urlBreakdown = document.getElementById('url-breakdown');
+  urlBreakdown.innerHTML = `
+    <span class="url-scheme">${scheme}</span><span class="url-subdomain">${subdomains ? subdomains + '.' : ''}</span><span class="url-domain">${domain}</span><span class="url-tld">${tld}</span><span class="url-path">${path}</span>
+    <br><br>
+    <span style="color:var(--muted);font-size:11px">Scheme: </span><span style="color:var(--accent);font-size:11px">${scheme || 'none'}</span>
+    &nbsp;&nbsp;
+    <span style="color:var(--muted);font-size:11px">Subdomain: </span><span style="color:var(--warn);font-size:11px">${subdomains || 'none'}</span>
+    &nbsp;&nbsp;
+    <span style="color:var(--muted);font-size:11px">Root domain: </span><span style="color:var(--danger);font-size:11px">${domain}${tld}</span>
+    &nbsp;&nbsp;
+    <span style="color:var(--muted);font-size:11px">Path: </span><span style="color:var(--muted);font-size:11px">${path || '/'}</span>
+  `;
+
+  const urlFindings = document.getElementById('url-findings');
+  const issues = [];
+
+  if (scheme === 'http://') issues.push({ sev: 'red', t: 'No HTTPS', d: 'Unencrypted connection. Legitimate sites use HTTPS.' });
+  if (subdomains.length > 10) issues.push({ sev: 'red', t: 'Subdomain trap detected', d: `"${subdomains}" is hiding the true root domain: ${domain}${tld}. Read URLs right-to-left.` });
+  if (subdomains.includes('secure') || subdomains.includes('login') || subdomains.includes('verify') || subdomains.includes('account')) {
+    issues.push({ sev: 'amber', t: 'Security keyword in subdomain', d: 'Attackers add "secure", "login", "verify" to subdomains to appear legitimate.' });
+  }
+  const typos = {'0':'o','1':'l','@':'a','rn':'m'};
+  Object.entries(typos).forEach(([fake,real]) => {
+    if (domain.includes(fake)) issues.push({ sev: 'amber', t: 'Possible typosquatting', d: `Character "${fake}" may replace "${real}" in domain name.` });
+  });
+  if (domain.includes('-')) issues.push({ sev: 'amber', t: 'Hyphen in domain', d: 'Combosquatting often adds hyphens (yourcompany-secure.com). Verify the real domain.' });
+  if (path.includes('verify') || path.includes('login') || path.includes('confirm') || path.includes('secure')) {
+    issues.push({ sev: 'amber', t: 'Suspicious path keywords', d: 'Path contains credential-harvesting keywords.' });
+  }
+  if (path.includes('token=') || path.includes('redirect=') || path.includes('next=')) {
+    issues.push({ sev: 'red', t: 'Token / redirect parameter', d: 'URLs with token, redirect, or next params are often used to harvest credentials or redirect after login.' });
+  }
+
+  urlFindings.innerHTML = issues.map(f => `
+    <div class="finding-item" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;padding:12px 14px">
+      <div class="finding-dot dot-${f.sev === 'red' ? 'red' : 'amber'}" style="margin-top:4px"></div>
+      <div class="finding-text"><strong>${f.t}</strong> — ${f.d}</div>
+    </div>
+  `).join('') || '<div class="finding-item" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;padding:12px 14px"><div class="finding-dot dot-green"></div><div class="finding-text"><strong>No obvious URL issues detected</strong> — Always verify independently if unsure.</div></div>';
+}
+
+// Auto-analyze the default email on load
+window.addEventListener('load', () => { analyzeEmail(); });
+</script>
+</body>
+</html>
